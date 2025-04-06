@@ -26,7 +26,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--dir', default="Image/validation", type=str, help='folder directory containing test images')
 parser.add_argument('--num_classes', default=2, type=int, help='number of classes, 2 for foreground/background, 11 for HSV diagnostic')
 parser.add_argument('--save_dir', default="pred_DET_dS", type=str, help='folder directory containing prediction results')
-parser.add_argument('--the_model', required=False, default='saved_tv13_models/DET_dS.pth', type=str, help='pretrained model to use for prediction')
+parser.add_argument('--the_model', required=False, default='Model/DET_dS.pth', type=str, help='pretrained model to use for prediction')
 
 parser.add_argument('--box_score_threshold', default=0.5, type=float, help='minimum score threshold, 0.8 for pair of strips. Default: %(default)s')
 parser.add_argument('--box_size_threshold', default=1000, type=float, help='minimum box size threshold. 1000 for pair of strips. Default: %(default)s')
@@ -52,7 +52,7 @@ else :
     device = torch.device('cpu')
 
 
-os.makedirs("Masks/" + args.save_dir, exist_ok=True)
+os.makedirs("Mask/" + args.save_dir, exist_ok=True)
 
 test_ds = TestDataset_blot(root=args.dir)
 # test_ds.imgs

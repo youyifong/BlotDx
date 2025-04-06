@@ -24,7 +24,7 @@ verbose = False
 
 parser = argparse.ArgumentParser()
 
-parser.add_argument('--the_model', required=False, default='saved_tv13_models/SEG_sS.pth', type=str, help='pretrained model to use for prediction')
+parser.add_argument('--the_model', required=False, default='Model/SEG_sS.pth', type=str, help='pretrained model to use for prediction')
 parser.add_argument('--dir', default="Image/validation", type=str, help='folder directory containing test images')
 parser.add_argument('--num_classes', default=2, type=int, help='number of classes, 2 for foreground/background, 11 for HSV diagnostic')
 parser.add_argument('--save_dir', default="TV/predSEGsS_val", type=str, help='folder directory containing prediction results')

@@ -26,11 +26,11 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--HSV', default='1', type=int, help='1 or 2')
 parser.add_argument('--num_classes', default=2, type=int, help='Number of classes. Default: %(default)s')
 parser.add_argument('--diagnostic_type', default='Final', type=str, help='Final, Majority, ...')
-parser.add_argument('--the_model', required=False, default='saved_tv13_models/CLS_HSV1_Final_2classes_dS_3chan_DET_dS_strips_seed0.pth,saved_tv13_models/CLS_HSV1_Final_2classes_dS_3chan_DET_dS_strips_seed1.pth,saved_tv13_models/CLS_HSV1_Final_2classes_dS_3chan_DET_dS_strips_seed2.pth', type=str, help='pretrained model to use for prediction')
+parser.add_argument('--the_model', required=False, default='Model/CLS_HSV1_Final_2classes_dS_3chan_DET_dS_strips_seed0.pth,Model/CLS_HSV1_Final_2classes_dS_3chan_DET_dS_strips_seed1.pth,Model/CLS_HSV1_Final_2classes_dS_3chan_DET_dS_strips_seed2.pth', type=str, help='pretrained model to use for prediction')
 
 parser.add_argument('--test_img_dir', default='Image/validation_DET_dS_strips', type=str, help='folder directory containing training test images')
 parser.add_argument('--mask_dir', default='None', type=str, help='an alternative way to provide test images. folder directory containing mask files.')
-parser.add_argument('--label_file', default='Image/sS_labels.csv', type=str, help='folder directory containing labels file')
+parser.add_argument('--label_file', default='Class_Label/gt/sS_labels.csv', type=str, help='folder directory containing labels file')
 # parser.add_argument('--save_dir', default="test_results", type=str, help='folder directory containing prediction results')
 
 parser.add_argument('--batch_size', default=24, type=int, help='batch size. Default: %(default)s')
@@ -158,13 +158,13 @@ if len(args.the_model) > 1:
     print(f"Ensemble accuracy: {len(all_predicted_ar) - len(en_misclassified_strips)}/{len(all_predicted_ar)}")
     print(f"Misclassified: {en_misclassified_strips}")
 
-    os.makedirs('Predicted_Labels', exist_ok=True)
+    os.makedirs('Class_Label', exist_ok=True)
 
     # save results to CSV
-    print("results saved to Predicted_Labels/"+args.save_to)
+    print("results saved to Class_Label/"+args.save_to)
     import csv
     header = ["FinalPredicted", "GroundTruth", "StripID"]
-    with open('Predicted_Labels/' + args.save_to, mode='w', newline='') as file:
+    with open('Class_Label/' + args.save_to, mode='w', newline='') as file:
         writer = csv.writer(file)
         writer.writerow(header)
         for row in zip(final_predicted, all_labels, all_strip_ids):

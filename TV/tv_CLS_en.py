@@ -17,7 +17,7 @@ parser.add_argument('--HSV', default=1, help='1 or 2')
 args = parser.parse_known_args()[0]
 print(args, '\n')
 
-folder='Predicted_Labels/'
+folder='Class_Label/'
 
 
 def f1(df1,df2,df3,saveto, print_2by2=False):

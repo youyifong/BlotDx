@@ -28,7 +28,11 @@ class TrainDataset_strips(Dataset): # noqa
         # if mask_dir is None, nchan has to be None as well
         assert (mask_dir is None) == (nchan is None)
 
+        # if folder has Thumbs.db, then an error will occur below
         img_files = sorted(glob.glob(os.path.join(img_dir, '*')))
+        # remove files that do not have image file extensions
+        img_files = [f for f in img_files if os.path.splitext(f)[1] in ['.png', '.jpg', '.jpeg', '.tiff']]
+
         labels_df = pd.read_csv(label_file)
 
         # diagnostic_type needs to be in ['Final', 'Majority']
@@ -109,7 +113,7 @@ class TrainDataset_strips(Dataset): # noqa
 
                 # convert labels to 1 and 0
                 self.labels = [1 if label == 'POSITIVE' else 0 for label in self.labels]
-                print(f"Number of POSITIVE and negative strips: {sum(self.labels)} : {len(self.labels)-sum(self.labels)}")
+                #print(f"Number of POSITIVE and negative strips: {sum(self.labels)} : {len(self.labels)-sum(self.labels)}")
 
             else:
                 # reorder strips to mix POS and neg strips evenly
@@ -117,7 +121,7 @@ class TrainDataset_strips(Dataset): # noqa
                 # split all_strips into two lists, one for when the corresponding label in all_labels is POSITIVE, the other for when the label is negative
                 strips_POS = [all_strips[i] for i in range(len(all_labels)) if all_labels[i] == 'POSITIVE']  # noqa
                 strips_neg = [all_strips[i] for i in range(len(all_labels)) if all_labels[i] == 'negative']  # noqa
-                print(f"Number of POSITIVE and negative strips: {len(strips_POS)} : {len(strips_neg)}")
+                #print(f"Number of POSITIVE and negative strips: {len(strips_POS)} : {len(strips_neg)}")
 
                 ids_POS = [all_ids[i] for i in range(len(all_labels)) if all_labels[i] == 'POSITIVE']  # noqa
                 ids_neg = [all_ids[i] for i in range(len(all_labels)) if all_labels[i] == 'negative']  # noqa
