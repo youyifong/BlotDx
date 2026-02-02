@@ -1,0 +1,594 @@
+---
+title: "Feature Exploration"
+output: 
+  html_document:
+    toc: true
+date: "`r format(Sys.Date(), '%B %d, %Y')`"
+---
+
+```{r, echo=F}
+show_code=F
+library(kyotil)
+setwd("/fh/fast/fong_y/HSVW/HSVWesternDiagnosticMethods")
+```
+
+```{r, data, echo=show_code}
+# read in the data from a csv file with column names but no row names
+scores1_0 <- read.csv("../Feature_Heatmap/CLS_HSV1_Final_2classes_SEG_sS1_strips_v4_RESNET50_variant3_seed0.pth/score_by_feature_testimage.csv", header = TRUE)
+scores1_1 <- read.csv("../Feature_Heatmap/CLS_HSV1_Final_2classes_SEG_sS1_strips_v4_RESNET50_variant3_seed1.pth/score_by_feature_testimage.csv", header = TRUE)
+scores1_2 <- read.csv("../Feature_Heatmap/CLS_HSV1_Final_2classes_SEG_sS1_strips_v4_RESNET50_variant3_seed2.pth/score_by_feature_testimage.csv", header = TRUE)
+
+order(abs(scores1_0[,"X2016.09.01_CZ_01_209"]), decreasing = TRUE)[1:10] - 1
+tmp = apply(scores1_0, 2, function(x) order(abs(x), decreasing = TRUE)[1:10])
+top10f = as.integer(names(sort(table(tmp), de=T)[1:10]))-1; top10f
+
+feature_importance1_0 <- rowMeans((scores1_0))
+feature_importance1_1 <- rowMeans((scores1_1))
+feature_importance1_2 <- rowMeans((scores1_2))
+
+# feature_importance1_0 <- rowMeans(abs(scores1_0))
+# feature_importance1_1 <- rowMeans(abs(scores1_1))
+# feature_importance1_2 <- rowMeans(abs(scores1_2))
+
+n=ncol(scores1_0)
+p=nrow(scores1_0)
+
+# k is the number of major features to consider. 
+# 5 is a good choice but 7 allows more details in the clustering
+k=7 
+stopifnot(k>=5) # one of the plots below shows 5 of the top features
+# find the index of the top k features in feature_importance1_0
+top_feature1_0_index <- order(feature_importance1_0, decreasing = T)[1:k]
+top_feature1_1_index <- order(feature_importance1_1, decreasing = T)[1:k]
+top_feature1_2_index <- order(feature_importance1_2, decreasing = T)[1:k]
+
+# remove X from the colnames
+colnames(scores1_0) <- gsub("X", "", colnames(scores1_0))
+colnames(scores1_1) <- gsub("X", "", colnames(scores1_1))
+colnames(scores1_2) <- gsub("X", "", colnames(scores1_2))
+
+# read gt label
+gt_labels <- read.csv("../Class_Label/gt/sS_labels.csv", header = TRUE)
+
+# retrieve FinalHSV1 from gt_labels by matching strip_id column with colnames(scores1_0)
+hsv1_status <- gt_labels[match(colnames(scores1_0), gt_labels$strip_id), "FinalHSV1"]
+mytable(hsv1_status)
+# code POSITIVE as 1 and negative as 0
+hsv1_status <- ifelse(hsv1_status=="POSITIVE", 1, 0)
+
+```
+
+## Distribution of feature mean scores
+
+Score means activation, or weight x feature. 
+
+```{r, hist_mean_score, echo=show_code, fig.height=4, fig.width=6, fig.align='center', fig.cap=paste0("**Distribution of ", p, " feature mean scores (mean is taken over ", n, " test images). Each seed corresponds to a different model.**")}
+
+par(mfrow=c(1,3), oma=c(1,2,0,0))
+shrink_margin()
+
+# compute feature mean score, without abs
+tmp <-cbind(rowMeans(scores1_0[,hsv1_status==1]), rowMeans(scores1_1[,hsv1_status==1]), rowMeans(scores1_2[,hsv1_status==1]))
+for(i in 1:3) {
+  hist(tmp[,i], xlab = "", col = "lightblue", main=""); abline(v=0, col="red")
+  title(main = "Seed "%.%i, line=1.2)
+}
+
+# add.mtext.label.2(c("HSV1","HSV2"), 2, line=0.5, cex=.8, font=2)
+
+```
+
+Note that 
+
+- The mean feature scores can be positive or negative
+- The distribution have a long tail on the right
+
+<br><br>
+Re-plot with smaller xlim shows similar results.
+
+```{r, hist_mean_score2, echo=show_code, fig.height=4, fig.width=6, fig.align='center', fig.cap=paste0("**Distribution of ", p, " feature mean scores (mean is taken over ", n, " test images). Each seed corresponds to a different model.**")}
+
+par(mfrow=c(1,3), oma=c(1,2,0,0))
+shrink_margin()
+
+xlim=c(-.5,.5)
+
+# compute feature mean score, without abs
+tmp <-cbind(rowMeans(scores1_0), rowMeans(scores1_1), rowMeans(scores1_2))
+breaks=c( seq(floor(10*min(tmp))/10, max(tmp), by=0.1), max(tmp))
+for(i in 1:3) {
+  hist(tmp[,i], xlab = "", col = "lightblue", main="", xlim=xlim, breaks = breaks); abline(v=0, col="red")
+  title(main = "Seed "%.%i, line=1.2)
+}
+
+# add.mtext.label.2(c("HSV1","HSV2"), 2, line=0.5, cex=.8, font=2)
+```
+
+
+<br><br>
+
+## Distribution of individual image feature scores
+
+Note
+
+- All feature indices are 0-based.
+- If seeds are not specified in the following, the results displayed are from models run with a seed value of 0.
+
+
+<br><br>
+```{r, histograms of top features, echo=show_code, fig.width=10, fig.height=8, fig.align="center",  fig.cap="**Distributions of scores from the top 10 features.**"}
+par(mfrow=c(2,5), oma=c(1,2,0,0))
+shrink_margin()
+tmp1=order(feature_importance1_0, decreasing = T)
+xlim=c(-1,2.5)
+for(i in 1:10) {hist(unlist(scores1_0[tmp1[i],]), main = "f"%.%(tmp1[i]-1), xlab = "", col = "lightblue", xlim=xlim, freq=F); abline(v=0, col="red", lty=2)}
+# add.mtext.label.2(c("HSV1","HSV1","HSV2","HSV2"), 2, line=0.5, cex=.8, font=2)
+```
+
+Note that
+
+- In HSV1, the maximum score drops below 10 at feature 6
+- In HSV2, the maximum score has not yet dropped below 10 at feature 10
+
+<br><br>
+```{r, histograms of random features, echo=show_code, fig.width=10, fig.height=4, fig.align="center",  fig.cap="**Distribution of scores from 5 random features.**"}
+par(mfrow=c(1,5), oma=c(1,2,0,0))
+shrink_margin()
+xlim=c(-1,1)
+for(i in 1:5) {hist(unlist(scores1_0[i,]), main = "f"%.%(i-1), xlab = "",  col = "lightblue", xlim=xlim); abline(v=0, col="red", lty=2)}
+add.mtext.label.2(c("HSV1","HSV2"), 2, line=0.5, cex=.8, font=2)
+```
+
+<br><br>
+
+## Top features 
+
+Top 10 feature scores and their indices (0-based) from three seeds for HSV1:
+```{r, echo=show_code}
+print(rbind(sort(feature_importance1_0, decreasing = T)[1:10],
+      sort(feature_importance1_1, decreasing = T)[1:10],
+      sort(feature_importance1_2, decreasing = T)[1:10]), digits=3)
+```
+```{r, top features HSV1, echo=show_code, collapse=TRUE}
+rbind(
+  top_feature1_0_index-1,
+  top_feature1_1_index-1,
+  top_feature1_2_index-1)
+# cat("Indices that appear in all three sets: ", concatList(intersect(intersect(top_feature1_0_index-1, top_feature1_1_index-1), top_feature1_2_index-1), ", "))
+cat("Indices that appear in at least two out of three sets: ", concatList(
+union(
+union(
+  intersect(top_feature1_0_index-1, top_feature1_1_index-1),
+  intersect(top_feature1_0_index-1, top_feature1_2_index-1)),
+  intersect(top_feature1_1_index-1, top_feature1_2_index-1)
+), ", "))
+```
+
+Top 10 feature scores and their indices from three seeds for HSV2
+```{r, echo=show_code}
+print(rbind(sort(feature_importance2, decreasing = T)[1:10],
+      sort(feature_importance2_1, decreasing = T)[1:10],
+      sort(feature_importance2_2, decreasing = T)[1:10]), digits=3)
+```
+```{r, top features HSV2, echo=show_code, collapse=TRUE}
+rbind(
+  top_feature2_0_index-1,
+  top_feature2_1_index-1,
+  top_feature2_2_index-1)
+tmp=intersect(intersect(top_feature2_0_index-1, top_feature2_1_index-1), top_feature2_2_index-1)
+if (length(tmp)==0) {
+  cat("No indices appear in all three sets.\n")
+} else cat("Indices that appear in all three sets: ", concatList(tmp, ", "))
+cat("Indices that appear in at least two out of three sets: ", concatList(
+union(
+union(
+  intersect(top_feature2_0_index-1, top_feature2_1_index-1),
+  intersect(top_feature2_0_index-1, top_feature2_2_index-1)),
+  intersect(top_feature2_1_index-1, top_feature2_2_index-1)
+), ", "))
+```
+
+<br><br>
+```{r Manhattan plot, fig.width=10, fig.height=6, echo=show_code, fig.align="center", fig.cap="**Manhattan plots of feature scores from "%.%n%.%" images. Features from different images are shown in different colors. The top "%.%k%.%" features are marked with asterisks.**"}
+par(mfrow=c(1,1))
+shrink_margin()
+par(mar = c(1, 3, 1, 1), oma=c(0,0,0,0), mgp = c(1.5, 0.5, 0))
+ylim=NULL
+mymatplot(scores1_0[,1:n], type = "l", col =1:n, make.legend = F, xlab = "", ylab = "Score", main = "HSV1", draw.x.axis = F, xaxt="n", ylim=ylim)
+# put a star at x=top_feature1_0_index and y=22
+points(top_feature1_0_index, rep(2, length(top_feature1_0_index)), pch=8, col="red")
+# par(mar = c(3, 3, 1, 1))
+# mymatplot(scores2[,1:n], type = "l", col =1:n, make.legend = F, xlab = "Feature", ylab = "Score", main = "HSV2", ylim=ylim)
+# # put a star at x=top_feature2_0_index and y=5
+# points(top_feature2_0_index, rep(25, length(top_feature2_0_index)), pch=8, col="red")
+
+```
+
+Note that
+
+- In HSV1, features not marked with asterisks have smaller scores
+- In HSV2, features not marked with asterisks can still have high scores
+
+
+
+<br><br>
+```{r, scree plot, echo=show_code, fig.align="center", fig.cap="**Scree plot of feature importance, defined as mean absolute scores across test images.**"}
+par(mfrow=c(1,1))
+shrink_margin()
+tmp = cbind(
+            sort(rowMeans((scores1_0)), decreasing = T), 
+            sort(rowMeans((scores1_1)), decreasing = T),
+            sort(rowMeans((scores1_2)), decreasing = T)
+            # ,
+            # sort(rowMeans(abs(scores2)), decreasing = T), 
+            # sort(rowMeans(abs(scores2_1)), decreasing = T),
+            # sort(rowMeans(abs(scores2_2)), decreasing = T)
+            )
+mymatplot(tmp, type = "l", xlab = "Ranked feature", ylab = "Score", main = "", ylim=c(0,.2), xlim=c(1,100), col=c(1,1,1,2,2,2), make.legend = F, pch=1, lty=c(1,2,3,1,2,3))
+# make the space below y=1 light blue and transparent
+polygon(c(-10, 100, 100, -10), c(0, 0, 1, 1), border = NA, col = rgb(0.5, 0.5, 1, 0.2))
+mylegend(x=2, col=1:2, lty=1, legend=c("HSV-1","HSV-2"))
+mylegend(x=3, col=1, lty=1:3, legend=c("Seed 0","Seed 1","Seed 2"))
+# plot(sort(feature_importance1_0, decreasing = T), type = "b", xlab = "Ranked feature", ylab = "Score", main = "", ylim=c(0,4), xlim=c(1,40)); 
+# lines(sort(feature_importance2, decreasing = T), type = "b", col=2)
+
+# investigate how often top_feature1_0_index are present in the top m features of a test image
+m=k
+top_feature1_index_in_top_k <- rep(0, ncol(scores1_0))
+for (i in 1:ncol(scores1_0)) {
+  top_feature1_index_in_top_k[i] <- sum(top_feature1_0_index %in% order(abs(scores1_0[,i]), decreasing = T)[1:m])
+}
+# # same for top_feature2_0_index
+# top_feature2_0_index_in_top_k <- rep(0, ncol(scores2))
+# for (i in 1:ncol(scores2)) {
+#   top_feature2_0_index_in_top_k[i] <- sum(top_feature2_0_index %in% order(abs(scores2[,i]), decreasing = T)[1:m])
+# }
+# print the number of times each feature in top_feature1_0_index is in the top 20 features of a test image
+# print(top_feature1_index_in_top_k)
+i1 = round(mean(top_feature1_index_in_top_k))
+# print the number of times each feature in top_feature2_0_index is in the top 20 features of a test image
+# print(top_feature2_0_index_in_top_k)
+# i2 = round(mean(top_feature2_0_index_in_top_k))
+
+```
+
+Note that
+
+- We choose the top `r k` features from the HSV1 model. On average, 4 out of the `r k` major features are in the top `r i1` features of a test image in the HSV1 model
+- We choose the top `r k` features from the HSV2 model as major features 3 out of the `r k` major features are in the top `r i2` features of a test image in the HSV2 model. 
+
+
+<br><br>
+
+## Scores heatmaps
+
+```{r, echo=show_code}
+library(pheatmap)
+
+# (i in 1:4) { # HSV1, HSV2, HSV1 nopre, HSV2 nopre
+# (j in 1:2) { # all features, top features
+
+f_heatmap=function(i,j) {
+
+  # i=3; j=1
+  if (i==1) { label="1"
+  } else if (i==2) { label="2" 
+  } else if (i==3){ label="1_nopre" 
+  } else { label="2_nopre" }
+  
+  data_matrix <- get("scores"%.%label)
+  index=get("top_feature"%.%label%.%"_index")
+  
+  if (j==1) {
+    rownames(data_matrix) <- paste("f", 1:nrow(data_matrix))  # Naming features
+  } else {
+    data_matrix = data_matrix[index,]
+    rownames(data_matrix) <- paste("f", index-1)  # Naming features
+  }
+  # colnames(data_matrix) <- paste("s", rep("",ncol(data_matrix)))   # Naming samples
+  data_transposed <- (data_matrix)
+  
+  # Compute hierarchical clustering for features (columns)
+  feature_dist <- dist(data_transposed)  # Compute distance between features
+  feature_clustering <- hclust(feature_dist, method="complete")  # Hierarchical clustering
+  
+  # Generate heatmap with feature clustering
+  ph = pheatmap(
+    data_transposed,
+    clustering_rows = feature_clustering,  # Cluster columns (features)
+    clustering_distance_cols = "euclidean",  # Default clustering for rows
+    clustering_method = "complete",  # Clustering method
+    scale = "row",  # Normalize column-wise
+    # cellwidth = 15,  # Adjust width of cells (for fewer samples)
+    # cellheight = 5 
+    main = "HSV"%.%label,
+    # show row names when j==2
+    show_rownames = j==2, 
+    fontsize_col = 4,
+    angle_col = 45,
+    show_colnames = T # too many samples
+  )
+  
+  # to find the test images that is in HSV1_nopre negative group 1
+  ordered_colnames <- colnames(data_transposed)[ph$tree_col$order]
+  if (j==1 & i==3) {
+    # print(ordered_colnames)
+  }
+}
+```
+<br><br>
+```{r, echo=show_code, fig.width=10, fig.align="center", fig.cap="**Heatmaps of feature scores. Each row is a feature and each column is a test image.**"}
+# first plot all features, second plot major features
+for (j in 1:2) { # all features, top features
+for (i in c(1)) {
+  f_heatmap(i,j)
+}
+}
+```
+
+Note
+
+- There are 58 positive test images for HSV1 
+- From pretrained weights,
+  - Most features show good discrimination between HSV1 positive and negative (different colors in different classes), but a small number do not
+  - In HSV1, the top 3 features are features of the negative class
+
+
+
+
+<br><br>
+```{r, echo=show_code, fig.width=10, fig.align="center", fig.cap="**Heatmaps of feature scores. Each row is a feature and each column is a test image.**"}
+# first plot all features, second plot major features
+for (j in 1:2) { # all features, top features
+for (i in c(2)) {
+  f_heatmap(i,j)
+}
+}
+```
+
+Note
+
+- There are 29 positive test images for HSV2
+- From pretrained weights,
+  - Most features show good discrimination between HSV1 positive and negative (different colors in different classes), but a small number do not
+  - In HSV2, the top 2 features are features of the negative class
+
+<br><br>
+
+## Feature correlations
+
+```{r, correlation, echo=show_code, fig.align="center", fig.cap="**Histograms of feature correlations.**"}
+# Compute the correlation between the feature scores of HSV1 model
+par(mfrow=c(2,2), oma=c(1,0,0,0))
+shrink_margin()
+xlim=c(-1,1)
+cors=list()
+for (i in 1:2) {
+  data_matrix <- t(get("scores"%.%i))
+  correlation <- cor(data_matrix)
+  # set diag to NA
+  diag(correlation) <- NA
+  hist(c(correlation), xlab="correlation bt features", main="HSV"%.%i%.%" All Features", freq=T, xlim=xlim)
+  
+  # compute correlation between the major features
+  index=get("top_feature"%.%i%.%"_index")
+  tab=correlation[sort(index), sort(index)]
+  hist(c(correlation[sort(index), sort(index)]), xlab="correlation bt features", main="HSV"%.%i%.%" Top "%.%k%.%" Features", freq=T, xlim=xlim)
+  # print(tab, digits=2)
+  
+  cors[[i]]=c(mean(abs(correlation), na.rm=T), mean(abs(tab), na.rm=T))
+}
+```
+
+Note that
+
+- The mean absolute correlation between all feature and major features is `r round(cors[[1]][1], 2)` and `r round(cors[[1]][2],2)` in HSV1, and `r round(cors[[2]][1],2)` and `r round(cors[[2]][2],2)` in HSV2
+- Why is the correlation between major features higher in HSV2 than in HSV1? One explanation is that most of the features are noise. And the useful features are highly correlated because they should all have similar patterns.
+
+
+<br><br>
+```{r, pairs, echo=show_code, fig.width=10, fig.height=10, fig.align="center", fig.cap="**Pairwise scatter plots of feature scores for f1146 from 3 HSV1 models and 3 HSV2 models.**"}
+i=1147
+tmp=t(rbind(
+        scores1_0[i,], 
+        scores1_1[i,],
+        scores1_2[i,],
+        scores2[i,],
+        scores2_1[i,],
+        scores2_2[i,]
+        ))
+colnames(tmp)=c("HSV1_1 f1146", "HSV1_2 f1146", "HSV1_3 f1146", "HSV2_1 f1146", "HSV2_2 f1146", "HSV2_3 f1146")
+mypairs(tmp)
+```
+
+Note
+
+- f1146 features from different models seem not so closely related, especially in HSV2
+- When HSV1_1 f1146 is positive, HSV1_3 f1146 is almost zero, and vice versa
+
+<br><br>
+```{r, echo=show_code, fig.width=10, fig.height=10, fig.align="center", fig.cap="**Pairwise scatter plots of feature scores for f1808 and f691 from 3 HSV1 models.**"}
+i=1808+1; j=691+1
+tmp=t(rbind(
+        scores1_0[i,], 
+        scores1_0[j,], 
+        scores1_1[i,],
+        scores1_1[j,],
+        scores1_2[i,],
+        scores1_2[j,]
+        ))
+colnames(tmp)=c("HSV1_1 f1808", "HSV1_1 f691", "HSV1_2 f1808", "HSV1_2 f691", "HSV1_3 f1808", "HSV1_3 f691")
+mypairs(tmp)
+```
+
+<br><br>
+```{r, compute AUC, echo=show_code}
+# compute AUC of each feature
+auc1=numeric(p)
+auc2=numeric(p)
+for (i in 1:p) {
+  # compute AUC of feature i
+  auc1[i] <- fastauc(unlist(scores1_0[i,]), hsv1_status)
+  auc2[i] <- fastauc(unlist(scores2[i,]), hsv2_status)
+} 
+```
+
+
+<br><br>
+```{r, echo=show_code, fig.align="center", fig.cap="**Distribution of AUC of features.**", fig.width=8, fig.height=4}
+par(mfrow=c(1,2), oma=c(1,0,0,0))
+shrink_margin()
+  hist(auc1, main = "HSV1", xlab = "Feature AUC", col = "lightblue")
+  hist(auc2, main = "HSV2", xlab = "Feature AUC", col = "lightblue")
+```
+
+
+<br><br>
+```{r, echo=show_code, fig.align="center", fig.cap="**Histograms of feature correlations conditional on AUC.**"}
+cutoff=0.8
+# divide features by AUC > 0.8
+auc_gt80_feature1_index <- which(auc1>cutoff)
+auc_lt80_feature1_index <- which(auc1<=cutoff)
+auc_gt80_feature2_index <- which(auc2>cutoff)
+auc_lt80_feature2_index <- which(auc2<=cutoff)
+
+# Compute the correlation between the feature scores of HSV1 model
+par(mfrow=c(2,2), oma=c(1,0,0,0))
+shrink_margin()
+xlim=c(-1,1)
+for (i in 1:2) {
+  # print("HSV"%.%i)
+  data_matrix <- t(get("scores"%.%i))
+  correlation <- cor(data_matrix)
+  # set diag to NA
+  diag(correlation) <- NA
+  
+  index=get("auc_gt80_feature"%.%i%.%"_index")
+  tab=correlation[sort(index), sort(index)]
+  # print(mean(abs(tab), na.rm=T))
+  hist(c(correlation[sort(index), sort(index)]), xlab="correlation bt features", main="HSV"%.%i%.%" Features with AUC>"%.%cutoff, xlim=xlim, freq=T)
+
+  index=get("auc_lt80_feature"%.%i%.%"_index")
+  tab=correlation[sort(index), sort(index)]
+  # print(mean(abs(tab), na.rm=T))
+  hist(c(correlation[sort(index), sort(index)]), xlab="correlation bt features", main="HSV"%.%i%.%" Features with AUC<="%.%cutoff, xlim=xlim, freq=T)
+}
+```
+
+Note
+
+- Features that are more discriminative (AUC > 0.8) tend to have higher correlations
+- This pattern is more clear in HSV-1 than in HSV-2
+- If threshold is raised, the bimodal pattern is more clear in HSV-2
+
+
+```{r, echo=show_code, fig.align="center", fig.cap="**Scatterplot of f1953 and f1846.**"}
+par(mfrow=c(1,2), oma=c(1,0,0,0))
+shrink_margin()
+
+i=1953+1; j=1846+1
+plot(unlist(scores1_0[i,]), unlist(scores1_0[j,]), xlab="f1953", ylab="f1846", main="HSV1", col=hsv1_status+1)
+abline(v=0, lty=2)
+abline(h=0, lty=2)
+
+i=1146+1; j=34+1
+plot(unlist(scores2[i,]), unlist(scores2[j,]), xlab="f1146", ylab="f34", main="HSV2", col=hsv2_status+1)
+abline(v=0, lty=2)
+abline(h=0, lty=2)
+```
+
+
+## Results for models trained starting from random weights
+
+Top 10 feature scores and their indices from three seeds for HSV1,starting from random weights:
+```{r, echo=show_code}
+print(rbind(sort(feature_importance1_nopre, decreasing = T)[1:10],
+      sort(feature_importance1_1_nopre, decreasing = T)[1:10],
+      sort(feature_importance1_2_nopre, decreasing = T)[1:10]), digits=3)
+```
+```{r, top features HSV1 random start, echo=show_code, collapse=TRUE}
+rbind(
+  top_feature1_nopre_index-1,
+  top_feature1_1_nopre_index-1,
+  top_feature1_2_nopre_index-1)
+tmp=intersect(intersect(top_feature1_nopre_index-1, top_feature1_1_nopre_index-1), top_feature1_2_nopre_index-1)
+if (length(tmp)==0) {
+  cat("No indices appear in all three sets.\n")
+} else cat("Indices that appear in all three sets: ", concatList(tmp, ", "))
+tmp=union(union(
+  intersect(top_feature1_nopre_index-1, top_feature1_1_nopre_index-1),
+  intersect(top_feature1_nopre_index-1, top_feature1_2_nopre_index-1)),
+  intersect(top_feature1_1_nopre_index-1, top_feature1_2_nopre_index-1))
+if (length(tmp)==0) {
+  cat("No indices appear in at least two out of three sets.\n")
+} else cat("Indices that appear in at least two out of three sets: ", concatList(tmp, ", "))
+```
+
+<br><br>
+```{r Manhattan plot random start, fig.width=10, fig.height=3, echo=show_code, fig.align="center", fig.cap="**Manhattan plots of feature scores from models trained from random starts from "%.%n%.%" images. Features from different images are shown in different colors. The top "%.%k%.%" features are marked with asterisks.**"}
+par(mfrow=c(1,1))
+shrink_margin()
+par(mar = c(3, 3, 1, 1), oma=c(0,0,0,0), mgp = c(1.5, 0.5, 0))
+ylim=c(-20,40)
+mymatplot(scores1_nopre[,1:n], type = "l", col =1:n, make.legend = F, xlab = "Feature", ylab = "Score", main = "HSV1 Random Start", draw.x.axis = F, ylim=ylim)
+# put a star at x=top_feature1_0_index and y=22
+points(top_feature1_0_index, rep(25, length(top_feature1_0_index)), pch=8, col="red")
+#par(mar = c(3, 3, 1, 1))
+#mymatplot(scores2[,1:n], type = "l", col =1:n, make.legend = F, xlab = "Feature", ylab = "Score", main = "HSV2", ylim=ylim)
+# put a star at x=top_feature2_0_index and y=5
+#points(top_feature2_0_index, rep(25, length(top_feature2_0_index)), pch=8, col="red")
+```
+
+Note that
+
+- With random start, no features dominate and
+- there is no overlap between the top features of the three models trained using different seeds, as we would expect
+
+
+<br><br>
+```{r, echo=show_code, fig.width=10, fig.align="center", fig.cap="**Heatmaps of feature scores. Each row is a feature and each column is a test image.**"}
+# first plot all features, second plot major features
+for (j in 1:2) { # all features, top features
+for (i in c(3)) {
+  f_heatmap(i,j)
+}
+}
+```
+
+Note
+
+- From random weights, with all features, there are two subgroups of HSV1 negative test images. Representatives from the two subgroups are shown below: one subgroup has almost no background and one subgroup has a lot of background.
+
+```{r, echo=FALSE, out.width="50%", fig.show="hold", fig.cap="**Examples from two subclasses of HSV-1 negative images. Heatmaps correspond to scores from models trained from pretrained weights.**", fig.align="center", fig.width=10}
+knitr::include_graphics(c("../Feature/CLS_HSV1_Final_2classes_SEG_sS1_strips_v4_pretrained_seed0.pth/per_feature_heatmaps/2016.10.31_CZ_03_229_Score_Map.png", "../Feature/CLS_HSV1_Final_2classes_SEG_sS1_strips_v4_pretrained_seed0.pth/per_feature_heatmaps/2016.09.01_CZ_01_231_Score_Map.png"))
+```
+
+
+```{r, echo=FALSE, out.width="50%", fig.show="hold", fig.cap="**Examples from two subclasses of HSV-1 negative images. Heatmaps correspond to scores from models trained from no pretrained weights.**", fig.align="center", fig.width=10}
+knitr::include_graphics(c("../Feature/CLS_HSV1_Final_2classes_SEG_sS1_strips_v4_nopretrained_seed0.pth/per_feature_heatmaps/2016.10.31_CZ_03_229_Score_Map.png", "../Feature/CLS_HSV1_Final_2classes_SEG_sS1_strips_v4_nopretrained_seed0.pth/per_feature_heatmaps/2016.09.01_CZ_01_231_Score_Map.png"))
+```
+
+
+<br><br>
+```{r, echo=show_code, fig.width=10, fig.align="center", fig.cap="**Heatmaps of feature scores. Each row is a feature and each column is a test image.**"}
+# first plot all features, second plot major features
+for (j in 1:2) { # all features, top features
+for (i in c(4)) {
+  f_heatmap(i,j)
+}
+}
+```
+<br><br>
+
+## Conclusions
+
+- 
+
+
+Questions
+
+- Could the fact that f1846 (4th feature for HSV-1 seed 0) light up strip 2 be due to the result of a flipping kernel?
+- If we train the model with more seeds and ensemble them, will we get similarly good performance from ensembling all three types of models?
+- Visual transformers
+- Train classification model that performs both HSV1 and HSV2 classification at the same time
+- Attention model
